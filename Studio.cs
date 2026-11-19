@@ -187,15 +187,21 @@ namespace DreamSkinStudio
         private readonly WallpaperLinkPanel wallpaperLink;
         private readonly Ambience ambience;
         private Color[] activeSeeds, selectedSeeds;
+        // Documentation screenshots: the self-test can show sample pictures and neutral
+        // names in place of the wallpapers that happen to be in this computer's library.
+        private readonly List<string> sampleArt = new List<string>();
+        private readonly Dictionary<string, int> sampleSlots = new Dictionary<string, int>();
+        private static readonly string[] SampleNames = { "极光", "暮色", "深海", "薄荷", "余烬", "星云", "晨雾", "霓虹", "琥珀", "青岚", "樱时", "夜航", "苔原" };
         private string activeSeedPath = "", selectedSeedPath = "";
         private T Find<T>(string name) where T : class { return window.FindName(name) as T; }
         private TextBlock Label(string name) { return Find<TextBlock>(name); }
         private Button Button(string name) { return Find<Button>(name); }
         private Slider Reveal { get { return Find<Slider>("RevealSlider"); } }
 
-        public StudioController(Window target, bool readOnlyTest = false)
+        public StudioController(Window target, bool readOnlyTest = false, string sampleFolder = null)
         {
             window = target; testMode = readOnlyTest;
+            if (readOnlyTest && sampleFolder != null) sampleArt.AddRange(Directory.GetFiles(sampleFolder, "*.jpg").OrderBy(file => file, StringComparer.OrdinalIgnoreCase));
             ambience = new Ambience(window);
             using (var artwork = Assembly.GetExecutingAssembly().GetManifestResourceStream("DreamSkinStudio.Mark.png"))
             {
@@ -290,6 +296,15 @@ namespace DreamSkinStudio
                 if (busy || pendingReveal.HasValue || wallpaperLink.IsMutating) { e.Cancel = true; closingRequested = true; Label("StatusText").Text = "正在完成当前操作，完成后关闭管理器。"; if (pendingReveal.HasValue) { revealTimer.Stop(); revealTimer.Start(); } }
             };
         }
+        private ThemeInfo Sample(ThemeInfo theme)
+        {
+            if (theme == null || sampleArt.Count == 0) return theme;
+            int slot;
+            if (!sampleSlots.TryGetValue(theme.Id, out slot)) { slot = sampleSlots.Count; sampleSlots[theme.Id] = slot; }
+            theme.MediaPath = sampleArt[slot % sampleArt.Count]; theme.MediaType = "image";
+            theme.Name = SampleNames[slot % SampleNames.Length] + (slot >= SampleNames.Length ? " " + (slot / SampleNames.Length + 1) : "");
+            return theme;
+        }
         private static void RoundClip(FrameworkElement element, double radius)
         {
             if (element == null) return;
@@ -377,7 +392,7 @@ namespace DreamSkinStudio
                 {
                     var result = await Task.Run(delegate { return EngineBridge.Call("ListThemes"); });
                     var entries = Json.Get(result, "themes") as System.Collections.IEnumerable;
-                    themes = entries == null ? new List<ThemeInfo>() : entries.Cast<object>().Select(x => ThemeInfo.From(Json.Map(x))).ToList();
+                    themes = entries == null ? new List<ThemeInfo>() : entries.Cast<object>().Select(x => Sample(ThemeInfo.From(Json.Map(x)))).ToList();
                     RenderLibrary();
                 }
                 if (!busy) Label("StatusText").Text = paused ? "背景已暂停 · 点击「继续显示」恢复。" : "已读取当前配置 · 操作会自动保存。";
@@ -390,7 +405,7 @@ namespace DreamSkinStudio
             loading = true;
             try
             {
-                var data = Json.Map(Json.Get(status, "active")); active = data.Count == 0 ? null : ThemeInfo.From(data);
+                var data = Json.Map(Json.Get(status, "active")); active = data.Count == 0 ? null : Sample(ThemeInfo.From(data));
                 UpdateSelectionActions();
                 if (UiPalette.Mode == "follow-theme") UiPalette.ApplyTheme(window, Json.Map(Json.Get(data, "colors")));
                 LoadSeeds(active, true);
@@ -634,7 +649,7 @@ namespace DreamSkinStudio
             var text = new StringBuilder();
             text.AppendLine("检查时间：" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
             text.AppendLine("DreamSkin 引擎：" + Json.Text(snapshot, "engineVersion"));
-            text.AppendLine("当前主题：" + Json.Text(current, "name", "未设置"));
+            text.AppendLine("当前主题：" + (sampleArt.Count > 0 && active != null ? active.Name : Json.Text(current, "name", "未设置")));
             text.AppendLine("媒体类型：" + (Json.Text(current, "mediaType") == "video" ? "视频" : "图片"));
             text.AppendLine("媒体文件：" + (File.Exists(Json.Text(current, "mediaPath")) ? "存在" : "未找到"));
             text.AppendLine("背景可见度：" + Json.Number(current, "reveal") + "%");
@@ -664,6 +679,7 @@ namespace DreamSkinStudio
             ShowPage(0); await Task.Delay(1400);
             if (window.FindName("MotionField") != null) throw new InvalidOperationException("Dense contour field remains in the layout.");
             if (!(window.FindName("ArtworkFrame") is Viewport3D)) throw new InvalidOperationException("The tilting preview stage is missing.");
+            var layout = new Dictionary<string, object>();
             // Motion: the aurora drifts on its own, and hover/press storyboards must run without errors.
             bool auroraMoved = false, effectsExercised = false;
             if (ambience.Rich)
@@ -688,6 +704,21 @@ namespace DreamSkinStudio
                 }
                 ambience.Unpose(); await Task.Delay(450);
                 effectsExercised = true;
+                if (sampleArt.Count > 0)
+                {
+                    // One circle of the pointer around the stage, frame by frame.
+                    string frames = Path.Combine(folder, "tilt"); Directory.CreateDirectory(frames);
+                    var stage = Find<FrameworkElement>("HomeStage");
+                    Point corner = stage.TransformToAncestor((Visual)window.Content).Transform(new Point());
+                    for (int i = 0; i < 30; i++)
+                    {
+                        double turn = i / 30.0 * Math.PI * 2, x = Math.Cos(turn) * 0.82, y = Math.Sin(turn) * 0.78;
+                        ambience.Pose(new Point(corner.X + (x + 1) / 2 * stage.ActualWidth, corner.Y + (y + 1) / 2 * stage.ActualHeight), x, y);
+                        await Task.Delay(40);
+                        Capture(Path.Combine(frames, i.ToString("00") + ".png"));
+                    }
+                    ambience.Unpose(); await Task.Delay(450);
+                }
             }
             if (window.FindName("BannerDream") != null) throw new InvalidOperationException("Oversized banner remains in the layout.");
             if (!"on".Equals(Button("NavHome").Tag)) throw new InvalidOperationException("Navigation selection state is missing.");
@@ -700,6 +731,7 @@ namespace DreamSkinStudio
                 player.Position = TimeSpan.Zero; player.Play(); await Task.Delay(900); playheadAdvanced = player.Position.TotalMilliseconds > 50; player.Pause();
             }
             Capture(Path.Combine(folder, "home.png"));
+            layout["home"] = Bounds("NavHome", "NavLibrary", "NavSettings", "AddMediaButton", "ApplyButton", "RefreshButton", "HomeStage", "ChangeMediaButton", "SaveThemeButton", "PauseSkinButton", "ShowLibraryButton", "RevealSlider", "Reveal60", "Reveal90", "PreviewOriginalButton", "PreviewEffectButton", "ColorsButton", "ConnectionLabel");
             Button("PreviewEffectButton").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
             if (Find<Border>("PreviewShade").Visibility != Visibility.Visible || Math.Abs(Find<Border>("PreviewShade").Opacity - (1 - reveal / 100)) > 0.001) throw new InvalidOperationException("Preview effect mode did not match the reveal setting.");
             Button("PreviewOriginalButton").RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
@@ -743,8 +775,19 @@ namespace DreamSkinStudio
             await Task.Delay(2600); // thumbnails, the selected theme's colours, and the colour glide
             string libraryAccent = UiPalette.Hex;
             Capture(Path.Combine(folder, "library.png"));
+            layout["library"] = Bounds("SearchBox", "ThemeList", "ImportZipButton", "OpenLibraryButton", "LibraryStage", "ApplySelectedButton", "RenameSelectedButton", "RecycleSelectedButton", "OpenSelectedButton", "ApplyButton");
+            if (sampleArt.Count > 0)
+            {
+                // The same page lit by three other pictures.
+                for (int shot = 0; shot < 3 && shot + 1 < list.Items.Count; shot++)
+                {
+                    list.SelectedIndex = shot + 1; await Task.Delay(1900);
+                    Capture(Path.Combine(folder, "palette-" + shot + ".png"));
+                }
+            }
             ShowPage(2); await Task.Delay(150); if (ambience.Rich) Capture(Path.Combine(folder, "entrance.png"));
             ShowPage(2); await Task.Delay(1500); await wallpaperLink.LoadStatus(); wallpaperLink.SelectMonitorForPreview("Monitor1"); await Diagnose(); Capture(Path.Combine(folder, "settings.png"));
+            layout["settings"] = Bounds("SettingsColorsButton", "AutoStartCheck", "OpenEngineFolderButton", "RestoreButton", "WallpaperLinkHost", "DiagnoseButton", "DiagnosticsText", "ApplyButton");
             string diagnosis = Find<TextBox>("DiagnosticsText").Text;
             if (!diagnosis.Contains("当前主题")) throw new InvalidOperationException("Readable diagnostics did not load.");
             window.Width = 1080; window.Height = 730; ShowPage(0); await Task.Delay(1500); Capture(Path.Combine(folder, "compact.png"));
@@ -758,7 +801,7 @@ namespace DreamSkinStudio
             string followAccent = UiPalette.Hex;
             UiPalette.Apply(window, "#35303C"); ShowPage(0); await Task.Delay(1500); Capture(Path.Combine(folder, "dark-ui-palette.png"));
             if (UiPalette.ContrastRatio < 4.5 || UiPalette.InkColor.R < 200) throw new InvalidOperationException("Dark UI palette did not choose legible light text.");
-            UiPalette.Load(window, EngineBridge.StateRoot); await RefreshAll(false);
+            UiPalette.Load(window, EngineBridge.StateRoot); if (sampleArt.Count > 0) UiPalette.FollowForThisSession(window); await RefreshAll(false);
             var colorDialog = new ThemeColorDialog(window);
             colorDialog.WindowStartupLocation = WindowStartupLocation.Manual; colorDialog.Left = -20000; colorDialog.Top = -20000; colorDialog.ShowActivated = false; colorDialog.ShowInTaskbar = false;
             colorDialog.Show(); deadline = DateTime.UtcNow.AddSeconds(25);
@@ -767,7 +810,20 @@ namespace DreamSkinStudio
             CaptureVisual((FrameworkElement)colorDialog.Content, Path.Combine(folder, "color-dialog.png")); colorDialog.Close();
 
             if (active.MediaPath != activePath || Math.Abs(Reveal.Value - reveal) > 0.01) throw new InvalidOperationException("Read-only test changed the selected live media or reveal.");
-            return new Dictionary<string, object> { { "ok", true }, { "designEdition", "10 - Nebula" }, { "denseLinesRemoved", true }, { "bannerRemoved", true }, { "richEffects", ambience.Rich }, { "auroraMoved", auroraMoved }, { "hoverAndTiltExercised", effectsExercised }, { "wallpaperAccent", followAccent }, { "previewedThemeAccent", libraryAccent }, { "wallpaperColoursFound", activeSeeds != null }, { "customUiColorContrastPassed", true }, { "followThemeMode", UiPalette.Mode }, { "wallpaperMonitorCount", wallpaperLink.MonitorCount }, { "libraryCount", libraryCount }, { "filteredCount", filteredCount }, { "activeMediaPath", activePath }, { "reveal", reveal }, { "videoMetadataLoaded", videoMetadata }, { "videoPlayheadAdvanced", playheadAdvanced }, { "controlBounds", bounds }, { "compactControlBoundsPassed", true }, { "diagnosticsLoaded", true }, { "liveWritesRequested", false } };
+            return new Dictionary<string, object> { { "ok", true }, { "designEdition", "10 - Nebula" }, { "denseLinesRemoved", true }, { "bannerRemoved", true }, { "richEffects", ambience.Rich }, { "auroraMoved", auroraMoved }, { "hoverAndTiltExercised", effectsExercised }, { "wallpaperAccent", followAccent }, { "previewedThemeAccent", libraryAccent }, { "wallpaperColoursFound", activeSeeds != null }, { "customUiColorContrastPassed", true }, { "followThemeMode", UiPalette.Mode }, { "wallpaperMonitorCount", wallpaperLink.MonitorCount }, { "libraryCount", libraryCount }, { "filteredCount", filteredCount }, { "activeMediaPath", activePath }, { "reveal", reveal }, { "videoMetadataLoaded", videoMetadata }, { "videoPlayheadAdvanced", playheadAdvanced }, { "controlBounds", bounds }, { "compactControlBoundsPassed", true }, { "diagnosticsLoaded", true }, { "liveWritesRequested", false }, { "samplePictures", sampleArt.Count }, { "layout", layout } };
+        }
+        /// <summary>Where the named controls sit in the captured picture, for callouts in the documentation.</summary>
+        private Dictionary<string, object> Bounds(params string[] names)
+        {
+            var found = new Dictionary<string, object>();
+            foreach (string name in names)
+            {
+                var element = Find<FrameworkElement>(name);
+                if (element == null || !element.IsVisible || element.ActualWidth <= 0) continue;
+                Point origin = element.TransformToAncestor((Visual)window.Content).Transform(new Point());
+                found[name] = new[] { origin.X, origin.Y, element.ActualWidth, element.ActualHeight };
+            }
+            return found;
         }
         private void Capture(string path)
         {
@@ -796,7 +852,11 @@ namespace DreamSkinStudio
             using (var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("DreamSkinStudio.MainWindow.xaml")) window = (Window)XamlReader.Load(stream);
             window.WindowStartupLocation = WindowStartupLocation.Manual; window.Left = -20000; window.Top = -20000; window.ShowActivated = false; window.ShowInTaskbar = false;
             UiPalette.Load(window, EngineBridge.StateRoot);
-            var controller = new StudioController(window, true);
+            // Optional third argument: a folder of sample pictures to show instead of the library's own.
+            // Those runs also light the window from the pictures, whatever colour mode is saved.
+            string samples = args.Length > 2 ? Path.GetFullPath(args[2]) : null;
+            if (samples != null) UiPalette.FollowForThisSession(window);
+            var controller = new StudioController(window, true, samples);
             window.Loaded += delegate
             {
                 window.Dispatcher.BeginInvoke(new Action(async delegate

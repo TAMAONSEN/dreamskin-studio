@@ -265,6 +265,13 @@ namespace DreamSkinStudio
             Mode = normalized;
         }
 
+        /// <summary>Follow the wallpaper until the window closes, leaving the saved choice untouched (documentation screenshots).</summary>
+        internal static void FollowForThisSession(Window window)
+        {
+            Mode = "follow-theme";
+            ApplyTheme(window, null);
+        }
+
         public static void Save(string stateRoot)
         {
             Persist(stateRoot, "manual", ManualHex);
