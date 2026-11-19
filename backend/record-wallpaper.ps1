@@ -2,6 +2,7 @@
 param(
   [ValidateSet('Record')][string]$Action = 'Record',
   [Parameter(Mandatory = $true)][string]$ProjectPath,
+  # MACHINE-SPECIFIC: the author's recording folder. Change this default on another computer.
   [string]$OutputDirectory = 'G:\CodexMediaWork\SceneRecordings',
   [ValidateRange(4, 60)][int]$Seconds = 26
 )
@@ -23,6 +24,8 @@ $wpeExe = $null
 $response = $null
 $exitStatus = 1
 $cleanupWarning = $null
+# MACHINE-SPECIFIC: where ffmpeg, ffprobe and Wallpaper Engine are installed on
+# the author's computer. Change all three paths on another computer.
 $ffmpeg = 'G:\CodexMediaWork\Nijika-Cloud\tools\ffmpeg.exe'
 $ffprobe = 'G:\CodexMediaWork\Nijika-Cloud\tools\ffprobe.exe'
 $wpeRoot = 'G:\steam\steamapps\common\wallpaper_engine'

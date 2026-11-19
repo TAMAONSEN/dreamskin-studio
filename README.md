@@ -48,12 +48,26 @@
 
 ## 已知限制
 
-- 两处路径是按作者的机器写的，换机器需要修改：
-  - `backend\wallpaper-link.ps1` 和 `backend\record-wallpaper.ps1` 里的 Wallpaper Engine 安装目录（`G:\steam\...`）；
-  - `backend\record-wallpaper.ps1` 开头的 ffmpeg、ffprobe 路径和录制输出目录。
 - 场景录制得到的是固定循环的视频，不会实时响应鼠标或音频。
 - 动效需要支持硬件加速的显卡；远程会话或关闭了系统动画时，界面外观相同但保持静止。
+- 后端脚本里有几处是按作者的机器写的，见下一节。
 
-## 说明
+## 按作者机器写的部分
 
-本仓库只包含管理界面的源码，不包含 Codex Dream Skin 引擎的文件，也不包含任何壁纸素材。引擎由其作者以 MIT 协议发布。
+下面这些值是作者电脑上的实际位置，换一台电脑必须改，否则 Wallpaper Engine 联动和场景录制不能用。其余功能不受影响。代码里每一处都有 `MACHINE-SPECIFIC` 注释，搜索这个词可以全部找到。
+
+| 文件 | 内容 | 当前值 |
+| --- | --- | --- |
+| `backend\wallpaper-link.ps1` | Wallpaper Engine 安装目录（参数 `-WallpaperEngineRoot` 的默认值） | `G:\steam\steamapps\common\wallpaper_engine` |
+| `backend\record-wallpaper.ps1` | Wallpaper Engine 安装目录（`$wpeRoot`） | `G:\steam\steamapps\common\wallpaper_engine` |
+| `backend\record-wallpaper.ps1` | ffmpeg 和 ffprobe 的位置（`$ffmpeg`、`$ffprobe`） | `G:\CodexMediaWork\Nijika-Cloud\tools\` |
+| `backend\record-wallpaper.ps1` | 录制文件的输出目录（参数 `-OutputDirectory` 的默认值） | `G:\CodexMediaWork\SceneRecordings` |
+| `backend\wallpaper-link.ps1` | 对创意工坊项目 `3650475846` 的兼容处理：作者早期录制过这个场景。本机没有对应的已保存主题时这段代码不起作用，可以不管。 | — |
+
+管理器本身（`*.cs`、`MainWindow.xaml`）、安装脚本和测试不含写死的个人路径，状态目录取自 `%LOCALAPPDATA%\CodexDreamSkin`。
+
+## 协议
+
+本仓库的代码以 [MIT 协议](LICENSE) 发布。
+
+本仓库只包含管理界面的源码，不包含 Codex Dream Skin 引擎的文件，也不包含任何壁纸素材。引擎由其作者另行以 MIT 协议发布。

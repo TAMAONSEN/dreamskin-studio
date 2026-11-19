@@ -8,6 +8,7 @@ param(
   [string]$ExpectedWorkshopId,
   [string]$ExpectedSceneFingerprint,
   [ValidateSet('true', 'false')][string]$Automatic = 'false',
+  # MACHINE-SPECIFIC: the author's Steam library is on G:. Change this default on another computer.
   [string]$WallpaperEngineRoot = 'G:\steam\steamapps\common\wallpaper_engine'
 )
 
@@ -218,8 +219,9 @@ function Get-LinkEntries {
           }
         } elseif ($entry.workshopId -ceq '3650475846' -and
             [IO.Directory]::Exists((Join-Path $script:LinkState 'themes\nijika-cloud-dynamic-3650475846'))) {
-          # Compatibility seed for the recording created before this mapping
-          # file existed. A newer scene than the recording must fail closed.
+          # MACHINE-SPECIFIC: one Workshop scene the author recorded before the
+          # mapping file existed. It does nothing unless that saved theme is
+          # present. A newer scene than the recording must fail closed.
           $recorded = Get-LinkMappedTheme -Id 'nijika-cloud-dynamic-3650475846'
           $recordedInfo = New-Object IO.FileInfo($recorded.MediaPath)
           $sceneInfo = New-Object IO.FileInfo($entry.mediaPath)
