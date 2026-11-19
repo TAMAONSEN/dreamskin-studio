@@ -55,7 +55,7 @@ powershell -ExecutionPolicy RemoteSigned -File .\build.ps1
 .\dist\DreamSkinStudio.exe --self-test .\dist\qa
 ```
 
-大约一分半钟后，`dist\qa\report.json` 里出现 `"ok":true` 就是通过，同一文件夹里还有各页面的截图。
+一分钟左右，`dist\qa\report.json` 里出现 `"ok":true` 就是通过，同一文件夹里还有各页面的截图。
 
 ### 第三步：安装
 
