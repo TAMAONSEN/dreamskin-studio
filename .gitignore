@@ -1,0 +1,28 @@
+# Build output
+dist/
+*.exe
+*.dll
+
+# Run logs and crash reports
+logs/
+*.log
+
+# Folders left behind by the isolated test suites
+bridge-fixture-*/
+wallpaper-link-fixture-*/
+
+# Experiments and earlier editions kept locally
+probes/
+color-dialog-compile/
+_backup-*/
+*.v1.cs
+*.v3.cs
+*.v1.xaml
+*.v3.xaml
+probe-replace.ps1
+TASK_PROGRESS.md
+
+# A copy of the upstream engine's stylesheet, not part of this project
+dream-skin-before-menu-continuity.*.css
+
+__pycache__/
